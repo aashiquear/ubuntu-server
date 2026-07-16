@@ -6,9 +6,15 @@ Requires=docker.service
 
 [Service]
 # guacd is not packaged on current Ubuntu, so run the official prebuilt image.
-# Bound to localhost only — it is reached solely by the dashboard.
+#
+# --network host is required: guacd must reach the HOST's XRDP at
+# 127.0.0.1:3389. On the default bridge network, 127.0.0.1 would be the
+# container's own loopback (no XRDP there) and the desktop session ends
+# immediately. With host networking, `-b 127.0.0.1` keeps guacd's own 4822
+# listener bound to localhost only, so it is not exposed to the LAN.
 ExecStartPre=-/usr/bin/docker rm -f ubws-guacd
-ExecStart=/usr/bin/docker run --rm --name ubws-guacd -p 127.0.0.1:4822:4822 guacamole/guacd:1.5.5
+ExecStart=/usr/bin/docker run --rm --name ubws-guacd --network host \
+  guacamole/guacd:1.5.5 -b 127.0.0.1 -L info -f
 ExecStop=-/usr/bin/docker stop ubws-guacd
 Restart=always
 RestartSec=3

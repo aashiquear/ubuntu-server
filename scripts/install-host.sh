@@ -131,11 +131,15 @@ sed -e "s#__REPO_DIR__#$REPO_DIR#g" \
     > /etc/systemd/system/ubuntu-web-dashboard.service
 
 systemctl daemon-reload
+# enable + restart (not `enable --now`) so re-running the installer picks up
+# updated unit files even when the service is already running.
 if [ "$GUACD_ENABLED" = "1" ]; then
-  systemctl enable --now ubuntu-web-guacd.service || \
+  systemctl enable ubuntu-web-guacd.service >/dev/null 2>&1 || true
+  systemctl restart ubuntu-web-guacd.service || \
     echo "!!  guacd service failed to start; check: journalctl -u ubuntu-web-guacd"
 fi
-systemctl enable --now ubuntu-web-dashboard.service
+systemctl enable ubuntu-web-dashboard.service >/dev/null 2>&1 || true
+systemctl restart ubuntu-web-dashboard.service
 
 IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 echo

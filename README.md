@@ -417,6 +417,12 @@ This project is designed for a **trusted LAN**. Before wider exposure:
   app container's XRDP — they must share a Docker network and `RDP_HOST` must be
   the app service's name (`ubuntu-web-dashboard`). XRDP needs the extra
   `shm_size`/`SYS_PTRACE` from the compose file.
+- **(Native) Remote Desktop shows "Starting…" then "ended" immediately.** guacd
+  couldn't reach the host's XRDP. The `ubuntu-web-guacd` service must run with
+  `--network host` (so its `127.0.0.1:3389` is the host's XRDP); re-run
+  `sudo ./scripts/install-host.sh` to refresh the unit, then check
+  `docker logs ubws-guacd` and confirm `ss -ltnp | grep 3389` shows XRDP
+  listening on the host.
 - **Remote Desktop connects but shows a black/blank screen.** The XFCE session
   failed to start. This is handled by `/etc/xrdp/startwm.sh` (sets
   `XDG_RUNTIME_DIR` + a session D-Bus) and `/etc/X11/Xwrapper.config`
