@@ -252,7 +252,12 @@ credentials, and their real home directory is what they see and work in.
 ### 🖼️ Remote Desktop (`/desktop`)
 - A full XFCE desktop delivered over Ubuntu's standard **XRDP** service and
   rendered in-browser via Guacamole. Keyboard and mouse are forwarded; use
-  **Reconnect** to renegotiate the display size.
+  **Reconnect** to renegotiate the display size. The view scales to fit your
+  window.
+- **Open only one desktop tab per account at a time.** Each tab is a separate
+  RDP client, and XRDP bumps the older session when a second one connects
+  (it appears as `Manually logged off` in the guacd logs), which can leave a
+  tab blank. Close extra tabs and use **Reconnect**.
 
 ---
 
