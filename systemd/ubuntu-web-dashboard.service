@@ -1,0 +1,21 @@
+[Unit]
+Description=Ubuntu Web Dashboard (browser access to this server)
+Documentation=https://github.com/aashiquear/ubuntu-server
+After=network-online.target ubuntu-web-guacd.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Runs as root: required to authenticate arbitrary system users via PAM and to
+# launch the terminal / file operations as the signed-in user (setuid).
+User=root
+EnvironmentFile=__ENV_FILE__
+WorkingDirectory=__REPO_DIR__
+ExecStart=/usr/bin/node __REPO_DIR__/src/server.js
+Restart=always
+RestartSec=3
+# Hardening that is still compatible with the app's needs.
+NoNewPrivileges=false
+
+[Install]
+WantedBy=multi-user.target

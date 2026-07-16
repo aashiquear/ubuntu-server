@@ -1,0 +1,17 @@
+[Unit]
+Description=guacd (Guacamole RDP proxy) for Ubuntu Web Dashboard
+Documentation=https://github.com/aashiquear/ubuntu-server
+After=docker.service
+Requires=docker.service
+
+[Service]
+# guacd is not packaged on current Ubuntu, so run the official prebuilt image.
+# Bound to localhost only — it is reached solely by the dashboard.
+ExecStartPre=-/usr/bin/docker rm -f ubws-guacd
+ExecStart=/usr/bin/docker run --rm --name ubws-guacd -p 127.0.0.1:4822:4822 guacamole/guacd:1.5.5
+ExecStop=-/usr/bin/docker stop ubws-guacd
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

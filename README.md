@@ -1,8 +1,8 @@
 # 🐧 Ubuntu Web Dashboard
 
-A self-contained, Docker-deployable dashboard that turns an Ubuntu server
-(targeting **Ubuntu 26.04**) into a workspace you can reach from any machine on
-the same LAN using nothing but a **web browser**.
+A dashboard that turns an Ubuntu server (targeting **Ubuntu 26.04**) into a
+workspace you can reach from any machine on the same LAN using nothing but a
+**web browser**.
 
 Sign in with your **existing system / SSH account** and get, each in its own
 browser tab and all running on the server:
@@ -10,18 +10,32 @@ browser tab and all running on the server:
 - 📁 **File Browser** — browse your home directory with drag-and-drop upload & download
 - 💻 **Terminal** — a full interactive shell, running as you
 - 🧩 **Web VS Code** — a stable build of VS Code (code-server) on the server
-- 🖼️ **Remote Desktop** — a graphical XFCE desktop over **XRDP**, rendered in the browser
+- 🖼️ **Remote Desktop** — a full graphical desktop over **XRDP**, rendered in the browser
 
 The landing page also shows a welcome note and **two live clocks** — one for the
 server and one for your browser — so time-zone differences are always visible.
+
+## Two ways to run it — pick based on what you want
+
+| | **Native install** (recommended) | **Docker** (self-contained sandbox) |
+|---|---|---|
+| Terminal / files / VS Code | The **real host** — your accounts, home dirs, files | Inside the container (isolated) |
+| Remote Desktop | The **host's own desktop with every installed app** | A minimal XFCE desktop *inside the container* |
+| Best for | Actually working on the server machine | A quick, throwaway, isolated demo |
+| Setup | `sudo ./scripts/install-host.sh` | `docker compose up -d --build` |
+
+> If your goal is to reach the **real server and its installed applications**,
+> use the **native install**. A container is sandboxed by design, so its
+> desktop/terminal only see what's *in the container*, not the host.
 
 ---
 
 ## Table of contents
 
 - [How it works](#how-it-works)
+- [Install natively on the server (recommended)](#install-natively-on-the-server-recommended)
 - [Requirements](#requirements)
-- [Quick start (Docker)](#quick-start-docker)
+- [Quick start (Docker sandbox)](#quick-start-docker-sandbox)
 - [Connecting from another machine on the LAN](#connecting-from-another-machine-on-the-lan)
 - [Authentication & users](#authentication--users)
 - [Features in detail](#features-in-detail)
@@ -88,22 +102,87 @@ ordinary services on the same machine:
 Everything is exposed on **one port**, so there's a single thing to publish to
 your LAN.
 
+The diagram above shows the **Docker sandbox**. In a **native install** the
+exact same Node app runs directly on the host (as a systemd service) instead of
+in a container, so `node-pty`, the file API, the `/vscode` proxy, and the
+desktop bridge all target the host's own shell, home directories, code-server,
+and XRDP — i.e. the real machine and its installed apps.
+
+---
+
+## Install natively on the server (recommended)
+
+This is the way to get **real access to the server and its installed apps**.
+Run it directly on the Ubuntu machine you want to reach:
+
+```bash
+git clone https://github.com/aashiquear/ubuntu-server.git
+cd ubuntu-server
+sudo ./scripts/install-host.sh
+```
+
+The installer:
+
+- installs Node.js, build tools, **XRDP**, and **code-server** on the host;
+- sets up the `ubws` PAM service (sign-in uses real system/SSH accounts);
+- runs `guacd` via Docker for the desktop bridge (if Docker is present);
+- writes `/etc/ubuntu-web-dashboard.env` (generated secrets, host wiring);
+- installs and starts systemd services: `ubuntu-web-dashboard`,
+  `ubuntu-web-guacd`, and `code-server@<user>`.
+
+Then open `http://<server-ip>:8080` and sign in with any account that can SSH
+into the box. Because everything runs on the host:
+
+- **Terminal** is a real shell on the server with every installed CLI tool.
+- **File Browser** shows your actual home directory.
+- **Web VS Code** edits the real filesystem.
+- **Remote Desktop** is a full session on the host's own desktop environment,
+  with **all installed applications**.
+
+Manage or remove it with:
+
+```bash
+journalctl -u ubuntu-web-dashboard -f     # logs
+sudo systemctl restart ubuntu-web-dashboard
+sudo ./scripts/uninstall-host.sh          # remove the services
+```
+
+### Remote Desktop on a real host — important notes
+
+- XRDP opens a **new login session** (with all your apps), not a mirror of the
+  physical monitor. To share the exact screen on the monitor instead, use VNC
+  to display `:0` or GNOME Remote Desktop — a different mechanism.
+- **GNOME allows only one session per user.** If the same account is already
+  logged in on the server's physical screen, log it out first, or connect with
+  a different account. Desktop environments like XFCE/MATE don't have this
+  limit and tend to be the smoothest over XRDP.
+- If a GNOME-over-XRDP session is black or drops immediately, installing a
+  lightweight DE for remote use is the usual fix:
+  `sudo apt install xfce4 xfce4-goodies` and set it as the session (e.g. put
+  `xfce4-session` in `~/.xsession`).
+
 ---
 
 ## Requirements
 
-- A machine (or VM) running Docker + Docker Compose.
-- Network reachability from the other LAN machines to the server's port `8080`.
-- For the desktop feature, the host should allow the container the modest extra
-  privileges shown in `docker-compose.yml` (`shm_size`, `SYS_PTRACE`).
+**Native install:** an Ubuntu host (24.04+/26.04), root access, and Docker
+present *if you want the Remote Desktop feature* (used only to run `guacd`).
 
-> **Note on the base image:** the image is built `FROM ubuntu:26.04`. If that
-> tag is not yet published in your registry, change the first line of the
+**Docker sandbox:** a machine running Docker + Docker Compose, and network
+reachability from the LAN to port `8080`. For the desktop, allow the container
+the modest extra privileges in `docker-compose.yml` (`shm_size`, `SYS_PTRACE`).
+
+> **Note on the base image:** the Docker image is built `FROM ubuntu:26.04`. If
+> that tag is not yet published in your registry, change the first line of the
 > `Dockerfile` to `ubuntu:24.04` — everything else is identical.
 
 ---
 
-## Quick start (Docker)
+## Quick start (Docker sandbox)
+
+> Reminder: the Docker path is a **self-contained sandbox** — its terminal,
+> files, and desktop live *inside the container*, not on the host. For access to
+> the real server and its apps, use the [native install](#install-natively-on-the-server-recommended).
 
 ```bash
 git clone https://github.com/aashiquear/ubuntu-server.git
@@ -250,10 +329,12 @@ credentials, and their real home directory is what they see and work in.
   the gate.
 
 ### 🖼️ Remote Desktop (`/desktop`)
-- A full XFCE desktop delivered over Ubuntu's standard **XRDP** service and
-  rendered in-browser via Guacamole. Keyboard and mouse are forwarded; use
-  **Reconnect** to renegotiate the display size. The view scales to fit your
-  window.
+- A full desktop delivered over Ubuntu's standard **XRDP** service and rendered
+  in-browser via Guacamole. In a **native install** this is the host's own
+  desktop environment with **all installed applications**; in the **Docker
+  sandbox** it's a minimal XFCE desktop inside the container. Keyboard and mouse
+  are forwarded; use **Reconnect** to renegotiate the display size, and the view
+  scales to fit your window.
 - **Open only one desktop tab per account at a time.** Each tab is a separate
   RDP client, and XRDP bumps the older session when a second one connects
   (it appears as `Manually logged off` in the guacd logs), which can leave a
@@ -378,8 +459,9 @@ src/            Node backend (server, auth, routes, websocket bridges)
 public/         Static assets (css/js) + vendored browser libs
 views/          HTML templates served only to authenticated users
 docker/         entrypoint, supervisord, xrdp, PAM, code-server launcher
-scripts/        postinstall vendor-bundle copier
-Dockerfile      Single-image build
+systemd/        service units for the native host install
+scripts/        install-host.sh / uninstall-host.sh + vendor-bundle copier
+Dockerfile      Single-image build (sandbox)
 docker-compose.yml
 ```
 
