@@ -51,11 +51,12 @@ COPY src ./src
 COPY views ./views
 COPY docker ./docker
 
-# Wire up config that lives outside the app tree.
+# Wire up config that lives outside the app tree. start-code-server.sh already
+# lives under ./docker (from COPY above); it just needs to be executable.
 RUN install -m 0644 docker/pam/ubws /etc/pam.d/ubws \
  && install -m 0755 docker/xrdp/startwm.sh /etc/xrdp/startwm.sh \
  && install -m 0755 docker/entrypoint.sh /usr/local/bin/entrypoint.sh \
- && install -m 0755 docker/start-code-server.sh /opt/ubws/docker/start-code-server.sh \
+ && chmod 0755 docker/start-code-server.sh \
  && install -m 0644 docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf \
  && mkdir -p /var/log/supervisor
 
