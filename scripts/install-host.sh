@@ -64,10 +64,15 @@ systemctl enable --now xrdp xrdp-sesman >/dev/null 2>&1 || true
 
 # --- 4. guacd (via Docker; not packaged on current Ubuntu) ----------------
 GUACD_ENABLED=0
-if command -v docker >/dev/null 2>&1; then
-  echo "==> Installing guacd service (Docker)..."
-  install -m0644 "$REPO_DIR/systemd/ubuntu-web-guacd.service" \
-    /etc/systemd/system/ubuntu-web-guacd.service
+DOCKER_BIN="$(command -v docker || true)"
+if [ -n "$DOCKER_BIN" ]; then
+  echo "==> Installing guacd service (Docker at $DOCKER_BIN)..."
+  # Pre-pull so the first service start doesn't race the image download.
+  "$DOCKER_BIN" pull guacamole/guacd:1.5.5 || \
+    echo "!!  Could not pre-pull guacd image; the service will pull on start."
+  sed "s#__DOCKER__#$DOCKER_BIN#g" \
+    "$REPO_DIR/systemd/ubuntu-web-guacd.service" \
+    > /etc/systemd/system/ubuntu-web-guacd.service
   GUACD_ENABLED=1
 else
   echo "!!  Docker not found. The Remote Desktop feature needs guacd."
@@ -135,8 +140,15 @@ systemctl daemon-reload
 # updated unit files even when the service is already running.
 if [ "$GUACD_ENABLED" = "1" ]; then
   systemctl enable ubuntu-web-guacd.service >/dev/null 2>&1 || true
-  systemctl restart ubuntu-web-guacd.service || \
-    echo "!!  guacd service failed to start; check: journalctl -u ubuntu-web-guacd"
+  systemctl restart ubuntu-web-guacd.service || true
+  sleep 3
+  if "$DOCKER_BIN" ps --format '{{.Names}}' 2>/dev/null | grep -qx ubws-guacd; then
+    echo "==> guacd is running."
+  else
+    echo "!!  guacd container is NOT running. Recent service logs:"
+    journalctl -u ubuntu-web-guacd --no-pager -n 20 || true
+    echo "!!  The Remote Desktop feature will not work until this is resolved."
+  fi
 fi
 systemctl enable ubuntu-web-dashboard.service >/dev/null 2>&1 || true
 systemctl restart ubuntu-web-dashboard.service
