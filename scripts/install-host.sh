@@ -60,7 +60,22 @@ install -m0644 "$REPO_DIR/docker/pam/ubws" /etc/pam.d/ubws
 # --- 3. XRDP (uses the host's own default desktop session) ----------------
 echo "==> Enabling XRDP..."
 adduser xrdp ssl-cert >/dev/null 2>&1 || true
-systemctl enable --now xrdp xrdp-sesman >/dev/null 2>&1 || true
+systemctl enable xrdp xrdp-sesman >/dev/null 2>&1 || true
+
+# Choose a port XRDP can actually bind. On Ubuntu Desktop, GNOME Remote Desktop
+# often already listens on 3389 (its RDP uses NLA + its own credentials, so it
+# can't do our PAM single sign-on). If something other than XRDP holds 3389,
+# move XRDP to 3390 so the two coexist.
+XRDP_PORT=3389
+if ss -ltnH 'sport = :3389' 2>/dev/null | grep -q . && \
+   ! ss -ltnHp 'sport = :3389' 2>/dev/null | grep -q '"xrdp"'; then
+  XRDP_PORT=3390
+  echo "==> Port 3389 is already in use (likely GNOME Remote Desktop);"
+  echo "    configuring XRDP on port $XRDP_PORT instead."
+  sed -i 's#^port=.*#port='"$XRDP_PORT"'#' /etc/xrdp/xrdp.ini
+fi
+systemctl restart xrdp xrdp-sesman >/dev/null 2>&1 || true
+echo "==> XRDP configured on port $XRDP_PORT."
 
 # --- 4. guacd (via Docker; not packaged on current Ubuntu) ----------------
 GUACD_ENABLED=0
@@ -96,7 +111,7 @@ PAM_SERVICE=ubws
 # container and reaches the host via Docker's host-gateway, so RDP_HOST is the
 # special name host.docker.internal (mapped to the host in the guacd service).
 RDP_HOST=host.docker.internal
-RDP_PORT=3389
+RDP_PORT=$XRDP_PORT
 GUACD_HOST=127.0.0.1
 GUACD_PORT=4822
 # Web VS Code:
@@ -125,6 +140,7 @@ set_env() {
 }
 if [ "$GUACD_ENABLED" = "1" ]; then
   set_env RDP_HOST host.docker.internal "$ENV_FILE"
+  set_env RDP_PORT "$XRDP_PORT" "$ENV_FILE"
   set_env GUACD_HOST 127.0.0.1 "$ENV_FILE"
   set_env GUACD_PORT 4822 "$ENV_FILE"
 fi

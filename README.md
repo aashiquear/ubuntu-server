@@ -417,12 +417,16 @@ This project is designed for a **trusted LAN**. Before wider exposure:
   app container's XRDP — they must share a Docker network and `RDP_HOST` must be
   the app service's name (`ubuntu-web-dashboard`). XRDP needs the extra
   `shm_size`/`SYS_PTRACE` from the compose file.
-- **(Native) Remote Desktop shows "Starting…" then "ended" immediately.** guacd
-  couldn't reach the host's XRDP. The `ubuntu-web-guacd` service must run with
-  `--network host` (so its `127.0.0.1:3389` is the host's XRDP); re-run
-  `sudo ./scripts/install-host.sh` to refresh the unit, then check
-  `docker logs ubws-guacd` and confirm `ss -ltnp | grep 3389` shows XRDP
-  listening on the host.
+- **(Native) Remote Desktop shows "Starting…" then "ended" immediately.**
+  guacd reached an RDP server that refused it. The usual cause on Ubuntu Desktop
+  is that **GNOME Remote Desktop already owns port 3389**
+  (`ss -ltnp | grep 3389` shows `gnome-remote-de`), so XRDP can't bind it and
+  guacd ends up talking to GNOME's RDP, which wants NLA + its own credentials
+  (`RDP server closed/refused connection: wrong security type`). The installer
+  detects this and puts **XRDP on port 3390** (setting `RDP_PORT=3390`), so the
+  two coexist — just re-run `sudo ./scripts/install-host.sh`. Verify with
+  `ss -ltnp | grep 339` (you should see XRDP on 3390) and
+  `docker logs ubws-guacd`.
 - **Remote Desktop connects but shows a black/blank screen.** The XFCE session
   failed to start. This is handled by `/etc/xrdp/startwm.sh` (sets
   `XDG_RUNTIME_DIR` + a session D-Bus) and `/etc/X11/Xwrapper.config`
