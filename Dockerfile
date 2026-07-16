@@ -23,7 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl gnupg openssl sudo locales tzdata \
       build-essential python3 libpam0g-dev \
       openssh-server \
-      xrdp xorgxrdp dbus-x11 \
+      xrdp xorgxrdp dbus-x11 xauth \
       xfce4 xfce4-terminal xfce4-goodies \
       supervisor \
  && rm -rf /var/lib/apt/lists/*
@@ -67,7 +67,9 @@ RUN install -m 0644 docker/pam/ubws /etc/pam.d/ubws \
 RUN printf 'allowed_users=anybody\nneeds_root_rights=yes\n' > /etc/X11/Xwrapper.config \
  && mkdir -p /etc/polkit-1/rules.d \
  && printf 'polkit.addRule(function(action, subject) {\n  if (subject.isInGroup("sudo")) { return polkit.Result.YES; }\n});\n' \
-      > /etc/polkit-1/rules.d/49-ubws-nopasswd.rules
+      > /etc/polkit-1/rules.d/49-ubws-nopasswd.rules \
+ && install -Dm0644 docker/xfce/xfwm4.xml \
+      /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml
 
 EXPOSE 8080
 # Optional direct access: 3389 (RDP) and 22 (SSH). Everything is reachable

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Default xfwm4 settings applied to every new user. Compositing is turned
+  OFF because the container renders with the llvmpipe software GL driver,
+  which xfwm4's compositor rejects ("Unsupported GL renderer (llvmpipe)")
+  and which results in a black screen over RDP. Without compositing, XFCE
+  paints normally.
+-->
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="use_compositing" type="bool" value="false"/>
+  </property>
+</channel>

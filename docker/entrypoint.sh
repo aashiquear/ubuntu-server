@@ -18,6 +18,10 @@ fi
 
 # --- Runtime directories --------------------------------------------------
 mkdir -p /var/run/sshd /run/dbus /var/log/supervisor /var/lib/dbus
+# X11/ICE session socket dirs (needed by the XFCE desktop; normally created
+# by systemd-tmpfiles, which isn't present in the container).
+mkdir -p /tmp/.X11-unix /tmp/.ICE-unix
+chmod 1777 /tmp/.X11-unix /tmp/.ICE-unix
 
 # --- SSH host keys --------------------------------------------------------
 ssh-keygen -A >/dev/null 2>&1 || true
