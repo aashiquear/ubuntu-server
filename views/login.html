@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign in · Ubuntu Web Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="login-wrap">
+    <form class="card login-card" method="POST" action="/login" autocomplete="on">
+      <h1>🐧 Ubuntu Web Dashboard</h1>
+      <p class="sub">Sign in with your server SSH account.</p>
+      <div id="alert" class="alert error" style="display:none"></div>
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required autofocus />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
+      </div>
+      <button class="btn" type="submit" style="width:100%; justify-content:center">Sign in</button>
+      <p class="center-note">Anyone with an SSH login on this server can sign in.</p>
+    </form>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const err = params.get('error');
+    if (err) {
+      const a = document.getElementById('alert');
+      a.textContent = err;
+      a.style.display = 'block';
+    }
+  </script>
+</body>
+</html>

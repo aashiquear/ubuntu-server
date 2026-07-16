@@ -1,0 +1,7 @@
+# PAM service used by the Ubuntu Web Dashboard to authenticate sign-ins
+# against the system's normal Unix credentials (the same ones used for SSH).
+# Deliberately minimal so it works for any regular account without the
+# securetty / nologin restrictions of the stock `login` service.
+@include common-auth
+@include common-account
+@include common-session-noninteractive

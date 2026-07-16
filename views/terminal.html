@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Terminal · Ubuntu Web Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="/vendor/xterm.css" />
+  <style>
+    body { overflow: hidden; }
+    .feature-page .body { background: #000; padding: 6px; }
+    #term { width: 100%; height: 100%; }
+    .status { font-size: 13px; }
+    .status .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--warn); margin-right:6px; vertical-align: middle; }
+    .status.connected .dot { background: var(--ok); }
+    .status.closed .dot { background: var(--err); }
+  </style>
+</head>
+<body>
+  <div class="feature-page">
+    <div class="topbar">
+      <div class="brand"><span class="logo">💻</span> Terminal</div>
+      <div class="right">
+        <span class="status" id="status"><span class="dot"></span><span id="status-text">Connecting…</span></span>
+        <a class="btn ghost small" href="/" target="_self">Dashboard</a>
+      </div>
+    </div>
+    <div class="body"><div id="term"></div></div>
+  </div>
+
+  <script src="/vendor/xterm.js"></script>
+  <script src="/vendor/xterm-addon-fit.js"></script>
+  <script src="/js/terminal.js"></script>
+</body>
+</html>

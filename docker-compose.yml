@@ -1,0 +1,37 @@
+services:
+  ubuntu-web-dashboard:
+    build: .
+    image: ubuntu-web-dashboard:latest
+    container_name: ubuntu-web-dashboard
+    hostname: ubuntu-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"        # Web dashboard (the only port you normally need)
+      # - "3389:3389"      # Optional: expose XRDP directly to the LAN
+      # - "2222:22"        # Optional: expose SSH directly to the LAN
+    environment:
+      # Convenience account created on first boot. Remove these and mount
+      # real host accounts for production (see README "Using host SSH users").
+      - DEFAULT_USER=ubuntu
+      - DEFAULT_PASSWORD=ubuntu
+      - TZ=UTC
+      - ALLOW_ROOT_LOGIN=false
+      # Pin these to keep sessions/tokens valid across restarts (otherwise
+      # they are randomly generated each boot):
+      # - SESSION_SECRET=please-change-me
+      # - GUAC_CRYPT_KEY=please-change-me-too
+    volumes:
+      - ubws-home:/home            # persist user home directories
+      # To authenticate against the *host's* real accounts instead, mount
+      # these read-only and drop DEFAULT_USER/PASSWORD above:
+      # - /etc/passwd:/etc/passwd:ro
+      # - /etc/shadow:/etc/shadow:ro
+      # - /etc/group:/etc/group:ro
+      # - /home:/home
+    # XRDP + the XFCE desktop are happier with more shared memory and ptrace.
+    shm_size: "1g"
+    cap_add:
+      - SYS_PTRACE
+
+volumes:
+  ubws-home:

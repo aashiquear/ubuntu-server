@@ -1,0 +1,29 @@
+{
+  "name": "ubuntu-web-dashboard",
+  "version": "1.0.0",
+  "description": "A Docker-deployable Ubuntu server dashboard accessible from a web browser over the LAN. Sign in with your system SSH account and get a file browser, terminal, web VS Code, and an XRDP desktop — all in the browser.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "NODE_ENV=development node src/server.js",
+    "postinstall": "node scripts/vendor.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "authenticate-pam": "^1.0.5",
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "guacamole-common-js": "^1.5.0",
+    "guacamole-lite": "^1.2.0",
+    "http-proxy": "^1.18.1",
+    "multer": "^1.4.5-lts.1",
+    "node-pty": "^1.0.0",
+    "ws": "^8.18.0",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
+  }
+}

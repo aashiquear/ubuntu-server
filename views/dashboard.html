@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard · Ubuntu Web Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><span class="logo">🐧</span> Ubuntu Web Dashboard</div>
+    <div class="right">
+      <span class="user" id="whoami">…</span>
+      <form method="POST" action="/logout" style="margin:0">
+        <button class="btn ghost small" type="submit">Sign out</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="card welcome">
+      <h2 id="welcome">Welcome 👋</h2>
+      <p id="welcome-sub">You are connected to <strong id="host">this server</strong>.</p>
+    </div>
+
+    <div class="clocks">
+      <div class="card clock">
+        <div class="label">🖥️ Server time</div>
+        <div class="time" id="server-time">--:--:--</div>
+        <div class="date" id="server-date">—</div>
+        <div class="tz" id="server-tz">—</div>
+      </div>
+      <div class="card clock">
+        <div class="label">🌐 Your browser time</div>
+        <div class="time" id="browser-time">--:--:--</div>
+        <div class="date" id="browser-date">—</div>
+        <div class="tz" id="browser-tz">—</div>
+      </div>
+    </div>
+
+    <h3 class="section-title">Available features</h3>
+    <div class="features">
+      <a class="card feature" href="/files" target="_blank" rel="noopener">
+        <div class="icon">📁</div>
+        <h3>File Browser</h3>
+        <p>Browse your home directory, and drag-and-drop to upload or download files.</p>
+        <span class="open">Open in new tab →</span>
+      </a>
+      <a class="card feature" href="/terminal" target="_blank" rel="noopener">
+        <div class="icon">💻</div>
+        <h3>Terminal</h3>
+        <p>A full interactive shell on the server, running as you.</p>
+        <span class="open">Open in new tab →</span>
+      </a>
+      <a class="card feature" href="/vscode/" target="_blank" rel="noopener">
+        <div class="icon">🧩</div>
+        <h3>Web VS Code</h3>
+        <p>A stable build of VS Code (code-server) running on the server.</p>
+        <span class="open">Open in new tab →</span>
+      </a>
+      <a class="card feature" href="/desktop" target="_blank" rel="noopener">
+        <div class="icon">🖼️</div>
+        <h3>Remote Desktop</h3>
+        <p>A full graphical desktop over XRDP, rendered in your browser.</p>
+        <span class="open">Open in new tab →</span>
+      </a>
+    </div>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>
