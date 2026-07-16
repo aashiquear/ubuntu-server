@@ -25,6 +25,22 @@ export XDG_CURRENT_DESKTOP=XFCE
 export XDG_SESSION_TYPE=x11
 export DESKTOP_SESSION=xfce
 
+# Force the window-manager compositor OFF for this session. The container
+# renders with the llvmpipe software GL driver, which xfwm4's compositor
+# rejects — leaving a black screen. The /etc/xdg default covers fresh users,
+# but a persistent home may already have compositing enabled, so we also set
+# it live here once xfconfd is up (retry until the session bus is ready).
+(
+  i=0
+  while [ "$i" -lt 10 ]; do
+    if xfconf-query -c xfwm4 -p /general/use_compositing -n -t bool -s false 2>/dev/null; then
+      break
+    fi
+    i=$((i + 1))
+    sleep 1
+  done
+) &
+
 # Launch XFCE inside its own session D-Bus so panels, settings daemon, etc.
 # have a message bus to talk on.
 exec dbus-launch --exit-with-session startxfce4

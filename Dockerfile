@@ -56,7 +56,7 @@ COPY docker ./docker
 RUN install -m 0644 docker/pam/ubws /etc/pam.d/ubws \
  && install -m 0755 docker/xrdp/startwm.sh /etc/xrdp/startwm.sh \
  && install -m 0755 docker/entrypoint.sh /usr/local/bin/entrypoint.sh \
- && chmod 0755 docker/start-code-server.sh \
+ && chmod 0755 docker/start-code-server.sh docker/start-dbus.sh \
  && install -m 0644 docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf \
  && mkdir -p /var/log/supervisor /run/user
 
