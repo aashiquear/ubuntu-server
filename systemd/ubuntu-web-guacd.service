@@ -12,13 +12,18 @@ StartLimitIntervalSec=0
 # __DOCKER__ is replaced with the detected docker binary path by
 # scripts/install-host.sh (handles /usr/bin/docker and snap's /snap/bin/docker).
 #
-# --network host is required: guacd must reach the HOST's XRDP at
-# 127.0.0.1:3389. On the default bridge network, 127.0.0.1 would be the
-# container's own loopback (no XRDP there) and the desktop session ends
-# immediately. `-b 127.0.0.1` keeps guacd's own 4822 listener localhost-only.
+# The image runs guacd via its default CMD (do NOT append args — guacd is not
+# an ENTRYPOINT, so extra args would replace the whole command).
+#
+# Networking: guacd's own port is published to the host's loopback ONLY
+# (127.0.0.1:4822), so it is never exposed to the LAN. To reach the host's
+# XRDP, the container resolves `host.docker.internal` to the host via Docker's
+# host-gateway; RDP_HOST is set to that name in /etc/ubuntu-web-dashboard.env.
 ExecStartPre=-__DOCKER__ rm -f ubws-guacd
-ExecStart=__DOCKER__ run --rm --name ubws-guacd --network host \
-  guacamole/guacd:1.5.5 -b 127.0.0.1 -L info -f
+ExecStart=__DOCKER__ run --rm --name ubws-guacd \
+  --add-host=host.docker.internal:host-gateway \
+  -p 127.0.0.1:4822:4822 \
+  guacamole/guacd:1.5.5
 ExecStop=-__DOCKER__ stop ubws-guacd
 Restart=always
 RestartSec=5

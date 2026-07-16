@@ -92,8 +92,10 @@ if [ ! -f "$ENV_FILE" ]; then
 NODE_ENV=production
 PORT=$PORT
 PAM_SERVICE=ubws
-# Remote desktop bridges to this host's own XRDP:
-RDP_HOST=127.0.0.1
+# Remote desktop bridges to this host's own XRDP. guacd runs in a Docker
+# container and reaches the host via Docker's host-gateway, so RDP_HOST is the
+# special name host.docker.internal (mapped to the host in the guacd service).
+RDP_HOST=host.docker.internal
 RDP_PORT=3389
 GUACD_HOST=127.0.0.1
 GUACD_PORT=4822
@@ -109,6 +111,22 @@ EOF
   chmod 600 "$ENV_FILE"
 else
   echo "==> Keeping existing $ENV_FILE"
+fi
+
+# Ensure the host-wiring keys are correct even in a pre-existing env file
+# (e.g. upgrading from an earlier version that set RDP_HOST=127.0.0.1).
+set_env() {
+  local key="$1" val="$2" file="$3"
+  if grep -q "^${key}=" "$file"; then
+    sed -i "s#^${key}=.*#${key}=${val}#" "$file"
+  else
+    echo "${key}=${val}" >> "$file"
+  fi
+}
+if [ "$GUACD_ENABLED" = "1" ]; then
+  set_env RDP_HOST host.docker.internal "$ENV_FILE"
+  set_env GUACD_HOST 127.0.0.1 "$ENV_FILE"
+  set_env GUACD_PORT 4822 "$ENV_FILE"
 fi
 
 # --- 7. code-server for the chosen user -----------------------------------
