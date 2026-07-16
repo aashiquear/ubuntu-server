@@ -16,8 +16,14 @@ const target = `http://${config.codeServerHost}:${config.codeServerPort}`;
 const proxy = httpProxy.createProxyServer({
   target,
   ws: true,
-  changeOrigin: true,
   xfwd: true,
+  // IMPORTANT: keep the browser's original Host header (do NOT changeOrigin).
+  // code-server guards its WebSocket against cross-site hijacking by requiring
+  // the request Origin's host to equal the Host header. Rewriting Host to
+  // 127.0.0.1:8443 makes that check fail and the workbench WebSocket closes
+  // with status 1006 ("failed to connect to the server"). Forwarding the real
+  // Host (e.g. server-ip:8080) makes Origin and Host match.
+  changeOrigin: false,
 });
 
 proxy.on('error', (err, req, res) => {
