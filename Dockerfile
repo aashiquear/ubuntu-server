@@ -11,15 +11,20 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # --- System packages ------------------------------------------------------
 # Grouped: base tools, build deps for native node modules (node-pty,
-# authenticate-pam), SSH, the XRDP desktop stack, Guacamole's guacd + RDP
-# client, and supervisor to run everything.
+# authenticate-pam), SSH, the XRDP desktop stack, and supervisor to run
+# everything.
+#
+# NOTE: guacd (the Guacamole proxy daemon that speaks RDP) is NOT installed
+# here — recent Ubuntu releases no longer ship the guacamole-server packages.
+# It runs instead as the official prebuilt `guacamole/guacd` sidecar
+# container (see docker-compose.yml), which is Guacamole's recommended
+# deployment and avoids a fragile FreeRDP source build.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl gnupg openssl sudo locales tzdata \
       build-essential python3 libpam0g-dev \
       openssh-server \
       xrdp xorgxrdp dbus-x11 \
       xfce4 xfce4-terminal xfce4-goodies \
-      guacd libguac-client-rdp0 libguac-client-vnc0 libguac-client-ssh0 \
       supervisor \
  && rm -rf /var/lib/apt/lists/*
 

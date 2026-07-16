@@ -5,6 +5,8 @@ services:
     container_name: ubuntu-web-dashboard
     hostname: ubuntu-server
     restart: unless-stopped
+    depends_on:
+      - guacd
     ports:
       - "8080:8080"        # Web dashboard (the only port you normally need)
       # - "3389:3389"      # Optional: expose XRDP directly to the LAN
@@ -16,6 +18,13 @@ services:
       - DEFAULT_PASSWORD=ubuntu
       - TZ=UTC
       - ALLOW_ROOT_LOGIN=false
+      # The desktop feature is bridged by the guacd sidecar, which connects
+      # back to THIS container's XRDP. GUACD_HOST is the guacd service name;
+      # RDP_HOST is this service's name on the compose network.
+      - GUACD_HOST=guacd
+      - GUACD_PORT=4822
+      - RDP_HOST=ubuntu-web-dashboard
+      - RDP_PORT=3389
       # Pin these to keep sessions/tokens valid across restarts (otherwise
       # they are randomly generated each boot):
       # - SESSION_SECRET=please-change-me
@@ -32,6 +41,13 @@ services:
     shm_size: "1g"
     cap_add:
       - SYS_PTRACE
+
+  # guacd: the Guacamole proxy daemon that speaks RDP to this container's
+  # XRDP and streams it to the browser. Official prebuilt image — no build.
+  guacd:
+    image: guacamole/guacd:1.5.5
+    container_name: ubuntu-web-guacd
+    restart: unless-stopped
 
 volumes:
   ubws-home:

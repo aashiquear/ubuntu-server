@@ -46,7 +46,7 @@ ordinary services on the same machine:
                               │  http(s)://server-ip:8080
                               ▼
 ┌───────────────────────────────────────────────────────────────┐
-│  Docker container (Ubuntu 26.04)                                │
+│  App container (Ubuntu 26.04)                                   │
 │                                                                 │
 │   ┌───────────────┐   PAM auth (SSH users)                      │
 │   │  Dashboard    │───────────────────────────────┐            │
@@ -54,13 +54,24 @@ ordinary services on the same machine:
 │   │   + WebSocket)│  /ws/terminal ── node-pty ──► login shell   │
 │   │               │  /api/files  ── fs (home jail)              │
 │   │               │  /vscode     ── reverse proxy ─► code-server│
-│   │               │  /ws/guac    ── guacamole-lite ─► guacd ─► xrdp
-│   └───────────────┘                                             │
-│                                                                 │
-│   Services (managed by supervisord):                            │
-│     sshd · xrdp + xrdp-sesman · guacd · code-server · dashboard │
-└───────────────────────────────────────────────────────────────┘
+│   │               │  /ws/guac    ── guacamole-lite ─┐          │
+│   └───────────────┘                                 │          │
+│                                                     ▼          │
+│   Services (supervisord):                     (RDP 3389)       │
+│     sshd · xrdp + xrdp-sesman · code-server · dashboard        │
+└────────────────────────────────────────────────────┼──────────┘
+                                                      │ RDP
+                              ┌───────────────────────▼──────────┐
+                              │  guacd sidecar (guacamole/guacd) │
+                              └──────────────────────────────────┘
 ```
+
+> **Why two containers?** `guacd` (the daemon that speaks RDP) is no longer
+> packaged in current Ubuntu, and building it from source is fragile on
+> releases that ship FreeRDP 3. Running the official prebuilt
+> `guacamole/guacd` image as a sidecar is Guacamole's recommended deployment.
+> The dashboard talks to it over TCP, and it connects back to the app
+> container's XRDP — all handled by `docker-compose.yml`.
 
 - **Terminal** streams a real PTY (`node-pty`) over a WebSocket to
   [xterm.js](https://xtermjs.org/) in the browser, spawned with your uid/gid.
@@ -121,15 +132,30 @@ docker compose down -v         # also delete home directories
 
 ### Without Compose
 
+The **Remote Desktop** feature needs the `guacd` sidecar, so run both
+containers on a shared network:
+
 ```bash
 docker build -t ubuntu-web-dashboard .
-docker run -d --name ubuntu-web-dashboard \
+docker network create ubws-net
+
+# guacd (RDP proxy)
+docker run -d --name ubuntu-web-guacd --network ubws-net \
+  guacamole/guacd:1.5.5
+
+# the dashboard app
+docker run -d --name ubuntu-web-dashboard --network ubws-net \
   -p 8080:8080 \
   --shm-size=1g --cap-add=SYS_PTRACE \
   -e DEFAULT_USER=ubuntu -e DEFAULT_PASSWORD=ubuntu \
+  -e GUACD_HOST=ubuntu-web-guacd -e RDP_HOST=ubuntu-web-dashboard \
   -v ubws-home:/home \
   ubuntu-web-dashboard
 ```
+
+The other three features (files, terminal, Web VS Code) work with just the
+dashboard container; only Remote Desktop requires `guacd`. Using
+`docker compose up` is simpler and wires all of this for you.
 
 ---
 
@@ -299,9 +325,12 @@ This project is designed for a **trusted LAN**. Before wider exposure:
 - **Terminal/desktop tab is blank.** These need the vendored browser bundles
   (`public/vendor/*`), which are produced by `npm install`'s postinstall step
   during the image build. Rebuild with `--no-cache` if you edited dependencies.
-- **Remote Desktop won't connect.** Check `xrdp`, `xrdp-sesman`, and `guacd`
-  logs under `/var/log/supervisor/`. XRDP needs the extra `shm_size`/`SYS_PTRACE`
-  from the compose file.
+- **Remote Desktop won't connect.** Check `xrdp`/`xrdp-sesman` logs in the app
+  container (`/var/log/supervisor/`) and the guacd sidecar
+  (`docker logs ubuntu-web-guacd`). Confirm the guacd container can reach the
+  app container's XRDP — they must share a Docker network and `RDP_HOST` must be
+  the app service's name (`ubuntu-web-dashboard`). XRDP needs the extra
+  `shm_size`/`SYS_PTRACE` from the compose file.
 - **Web VS Code shows a proxy error briefly after boot.** code-server takes a
   few seconds to start; refresh. If assets misbehave behind a subpath, front the
   app with a dedicated hostname instead of the `/vscode` subpath.
@@ -322,8 +351,11 @@ npm install
 sudo PORT=8080 DEFAULT_USER=$USER npm start
 ```
 
-Then browse to `http://localhost:8080`. code-server, guacd, and xrdp must be
-installed and running for those specific features to work; the file browser and
+Then browse to `http://localhost:8080`. code-server and xrdp must be installed
+and running for those features, and a guacd instance must be reachable at
+`GUACD_HOST:GUACD_PORT` for the desktop (the quickest way is
+`docker run -d -p 4822:4822 guacamole/guacd:1.5.5` with `GUACD_HOST=127.0.0.1`).
+The file browser and
 terminal work with just Node + PAM.
 
 Project layout:
