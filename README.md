@@ -331,6 +331,14 @@ This project is designed for a **trusted LAN**. Before wider exposure:
   app container's XRDP — they must share a Docker network and `RDP_HOST` must be
   the app service's name (`ubuntu-web-dashboard`). XRDP needs the extra
   `shm_size`/`SYS_PTRACE` from the compose file.
+- **Remote Desktop connects but shows a black/blank screen.** The XFCE session
+  failed to start. This is handled by `/etc/xrdp/startwm.sh` (sets
+  `XDG_RUNTIME_DIR` + a session D-Bus) and `/etc/X11/Xwrapper.config`
+  (`allowed_users=anybody`) baked into the image. If you still see black,
+  inspect the per-session logs inside the app container as the logged-in user:
+  `~/.xorgxrdp.*.log`, `~/.xsession-errors`, and
+  `docker exec ubuntu-web-dashboard cat /var/log/supervisor/xrdp-sesman.log`.
+  A quick sanity check that the desktop is installed: `which startxfce4`.
 - **Web VS Code shows a proxy error briefly after boot.** code-server takes a
   few seconds to start; refresh. If assets misbehave behind a subpath, front the
   app with a dedicated hostname instead of the `/vscode` subpath.

@@ -58,7 +58,16 @@ RUN install -m 0644 docker/pam/ubws /etc/pam.d/ubws \
  && install -m 0755 docker/entrypoint.sh /usr/local/bin/entrypoint.sh \
  && chmod 0755 docker/start-code-server.sh \
  && install -m 0644 docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf \
- && mkdir -p /var/log/supervisor
+ && mkdir -p /var/log/supervisor /run/user
+
+# XRDP desktop plumbing so the XFCE session actually renders (otherwise the
+# remote desktop is a black screen):
+#  - Xwrapper.config lets xrdp's Xorg backend start without a real console.
+#  - a polkit rule stops sudo users being blocked by background auth prompts.
+RUN printf 'allowed_users=anybody\nneeds_root_rights=yes\n' > /etc/X11/Xwrapper.config \
+ && mkdir -p /etc/polkit-1/rules.d \
+ && printf 'polkit.addRule(function(action, subject) {\n  if (subject.isInGroup("sudo")) { return polkit.Result.YES; }\n});\n' \
+      > /etc/polkit-1/rules.d/49-ubws-nopasswd.rules
 
 EXPOSE 8080
 # Optional direct access: 3389 (RDP) and 22 (SSH). Everything is reachable
