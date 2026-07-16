@@ -63,19 +63,206 @@ adduser xrdp ssl-cert >/dev/null 2>&1 || true
 systemctl enable xrdp xrdp-sesman >/dev/null 2>&1 || true
 
 # Choose a port XRDP can actually bind. On Ubuntu Desktop, GNOME Remote Desktop
-# often already listens on 3389 (its RDP uses NLA + its own credentials, so it
-# can't do our PAM single sign-on). If something other than XRDP holds 3389,
-# move XRDP to 3390 so the two coexist.
-XRDP_PORT=3389
-if ss -ltnH 'sport = :3389' 2>/dev/null | grep -q . && \
-   ! ss -ltnHp 'sport = :3389' 2>/dev/null | grep -q '"xrdp"'; then
-  XRDP_PORT=3390
-  echo "==> Port 3389 is already in use (likely GNOME Remote Desktop);"
-  echo "    configuring XRDP on port $XRDP_PORT instead."
-  sed -i 's#^port=.*#port='"$XRDP_PORT"'#' /etc/xrdp/xrdp.ini
+# (or its leftover user-mode daemon) often listens on 3389/3390 with a
+# security layer our PAM single sign-on can't traverse. We do NOT touch that
+# service here — we just pick the first free port in a small range so the
+# two daemons can coexist. The range is intentionally narrow so the operator
+# can still find XRDP from the host's firewall / SSH-tunnel.
+XRDP_PORT=""
+# A second daemon (e.g. gnome-remote-desktop) can grab a port between our
+# scan and xrdp's bind(). Re-scan at most 3 times with a brief pause; if it
+# keeps stealing ports, give up and let the operator decide.
+for attempt in 1 2 3 4 5; do
+  for cand in 3389 3390 3391 3392 3393; do
+    if ! ss -ltnH "sport = :$cand" 2>/dev/null | grep -q .; then
+      XRDP_PORT="$cand"
+      break 2
+    fi
+  done
+  sleep 1
+done
+if [ -z "$XRDP_PORT" ]; then
+  echo "!!  None of the candidate RDP ports (3389-3393) stayed free." >&2
+  echo "!!  Listeners currently bound:" >&2
+  ss -ltnHp 'sport = :3389 or sport = :3390 or sport = :3391 or sport = :3392 or sport = :3393' 2>/dev/null >&2 || true
+  echo "!!  Free one of them (e.g. stop the conflicting service) and re-run." >&2
+  exit 1
 fi
+# Only rewrite the [Globals] `port=` line. /etc/xrdp/xrdp.ini has the same
+# key (`port=`) in the per-session blocks ([Xorg], [Xvnc], [vnc-any],
+# [neutrinordp-any]) where it means the *sesman* port the session module
+# connects to (normally `-1` for sesman-allocated displays, or `ask5900` /
+# `ask3389` for the dynamic ones). A naive `sed 's/^port=.../.../'` rewrites
+# every match and silently breaks session startup ("Error connecting to user
+# session" in the xrdp log), because the per-session ports end up pointing
+# at 3389 (the RDP listening port) instead of sesman. Scope the rewrites
+# to the section they belong to, and also restore the dpkg defaults in the
+# per-session blocks in case a previous install run clobbered them.
+awk -v target="$XRDP_PORT" '
+  /^\[Globals\]/ { in_globals=1; print; next }
+  /^\[Xorg\]/            { in_globals=0; in_block="Xorg";            print; next }
+  /^\[Xvnc\]/            { in_globals=0; in_block="Xvnc";            print; next }
+  /^\[vnc-any\]/         { in_globals=0; in_block="vnc-any";         print; next }
+  /^\[neutrinordp-any\]/ { in_globals=0; in_block="neutrinordp-any"; print; next }
+  /^\[/                  { in_globals=0; in_block="";                print; next }
+  in_globals && /^port=/ { sub(/^port=.*/, "port=" target) }
+  in_block == "Xorg"            && /^port=/ { sub(/^port=.*/, "port=-1") }
+  in_block == "Xvnc"            && /^port=/ { sub(/^port=.*/, "port=-1") }
+  in_block == "vnc-any"         && /^port=/ { sub(/^port=.*/, "port=ask5900") }
+  in_block == "neutrinordp-any" && /^port=/ { sub(/^port=.*/, "port=ask3389") }
+  { print }
+' /etc/xrdp/xrdp.ini > /etc/xrdp/xrdp.ini.new \
+  && mv /etc/xrdp/xrdp.ini.new /etc/xrdp/xrdp.ini
+
 systemctl restart xrdp xrdp-sesman >/dev/null 2>&1 || true
-echo "==> XRDP configured on port $XRDP_PORT."
+
+# Verify XRDP actually came up. Without this check, a bind conflict (e.g. a
+# process grabbing the port after our probe) would silently leave the env
+# file pointing at a dead XRDP — guacd would then connect to whatever IS
+# listening on that port and fail with "wrong security type" at runtime.
+#
+# Two checks: (1) the service is active, and (2) *something* is listening on
+# the chosen port. We deliberately don't require the listener to be labeled
+# "xrdp" in `ss -p` because that label only appears when `ss` runs as root
+# with CAP_NET_ADMIN; a plain root shell always has it, but a tightly-locked
+# one (e.g. systemd ProtectKernelTuning) might not. The pair of checks is
+# strong enough: if xrdp is dead (1) catches it; if xrdp restarted but
+# someone else grabbed the port, (2) catches it.
+#
+# `systemctl is-active` can return `active` *during* the start transaction,
+# before xrdp has actually bound the socket. Wait a few seconds for the bind
+# to land before checking.
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  if ss -ltnH "sport = :$XRDP_PORT" 2>/dev/null | grep -q .; then
+    break
+  fi
+  sleep 0.5
+done
+if ! systemctl is-active --quiet xrdp; then
+  echo "!!  xrdp.service failed to start." >&2
+  journalctl -u xrdp --no-pager -n 20 >&2 || true
+  exit 1
+fi
+if ! ss -ltnH "sport = :$XRDP_PORT" 2>/dev/null | grep -q .; then
+  echo "!!  xrdp is running but is NOT listening on $XRDP_PORT." >&2
+  ss -ltnH "sport = :$XRDP_PORT" 2>/dev/null >&2 || true
+  journalctl -u xrdp --no-pager -n 20 >&2 || true
+  exit 1
+fi
+echo "==> XRDP is listening on port $XRDP_PORT."
+
+# Install our own startwm.sh. The dpkg default exec's /etc/X11/Xsession,
+# which honours the user's ~/.xsession. If that file contains a bare
+# `xfce4-session` (a common pattern on Ubuntu desktop installs) and the
+# user's ~/.config/xfce4/xfconf/.../xfce4-session.xml is stale or has a
+# SessionName that doesn't match any defined session, xfce4-session
+# starts the panel/desktop but never starts the window manager, leaving
+# the user staring at a frozen / non-interactive desktop. Launching
+# startxfce4 directly (the way the container does) bypasses ~/.xsession
+# and the XFCE session store entirely, so we always get a working window
+# manager. systemd is already providing the per-user XDG_RUNTIME_DIR
+# and the session D-Bus, so we don't need the dbus-launch wrapper.
+echo "==> Installing /etc/xrdp/startwm.sh..."
+cat > /etc/xrdp/startwm.sh <<'EOF'
+#!/bin/sh
+# Ubuntu Web Dashboard — startwm.sh for XRDP on the host.
+#
+# xrdp-sesexec runs this as the logged-in user with DISPLAY=:N. We launch
+# startxfce4 directly (bypassing /etc/X11/Xsession and ~/.xsession) so
+# xfwm4 is always started. See the comment in scripts/install-host.sh
+# for the bug this avoids.
+if [ -r /etc/profile ]; then
+  . /etc/profile
+fi
+if [ -r "$HOME/.profile" ]; then
+  . "$HOME/.profile"
+fi
+export XDG_SESSION_DESKTOP=xfce
+export XDG_CURRENT_DESKTOP=XFCE
+export XDG_SESSION_TYPE=x11
+export DESKTOP_SESSION=xfce
+# Disable xfwm4's compositor: the headless AMD/Intel GPU stack on this
+# host uses llvmpipe, which xfwm4's compositor rejects ("Unsupported GL
+# renderer"), leaving a black screen. The /etc/xdg default covers fresh
+# users, but a persistent home may already have compositing on.
+(
+  i=0
+  while [ "$i" -lt 10 ]; do
+    if xfconf-query -c xfwm4 -p /general/use_compositing -n -t bool -s false 2>/dev/null; then
+      break
+    fi
+    i=$((i + 1))
+    sleep 1
+  done
+) &
+exec startxfce4
+EOF
+chmod 0755 /etc/xrdp/startwm.sh
+
+# Allow Xorg to start for non-console users. /etc/X11/Xwrapper.config
+# defaults to `allowed_users=console`, which makes Xorg.wrap refuse every
+# RDP session ("Xorg: Only console users are allowed to run the X server",
+# surfaced in xrdp's log as "Error connecting to user session"). Bump it to
+# `anybody` so xrdp's per-user X server can come up. This is the same
+# setting the xrdp snap and most other "headless X" recipes ship.
+if [ -f /etc/X11/Xwrapper.config ] && \
+   ! grep -qE '^\s*allowed_users=anybody' /etc/X11/Xwrapper.config 2>/dev/null; then
+  echo "==> Setting Xwrapper to allowed_users=anybody (xrdp needs it)..."
+  sed -i 's/^\s*allowed_users=.*/allowed_users=anybody/' /etc/X11/Xwrapper.config
+  # If the line wasn't there at all, append it.
+  if ! grep -qE '^\s*allowed_users=anybody' /etc/X11/Xwrapper.config; then
+    echo "allowed_users=anybody" >> /etc/X11/Xwrapper.config
+  fi
+fi
+
+# Disable xfwm4 compositing by default for every new user. The container
+# renders with the llvmpipe software GL driver, which xfwm4's compositor
+# rejects — leaving a black screen. The same driver is what a typical
+# headless host uses too (no discrete GPU available to the RDP session).
+install -d /etc/xdg/xfce4/xfconf/xfce-perchannel-xml
+install -m 0644 "$REPO_DIR/docker/xfce/xfwm4.xml" \
+  /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml
+
+# Allow RDP users to drive Xorg. xorgxrdp's default config
+# (/etc/X11/xrdp/xorg.conf) opens /dev/dri/renderD128 for the per-user X
+# server. On Ubuntu, /dev/dri/{card,renderD}* are root:video / root:render
+# mode 0660 — without group membership, the per-user Xorg process started
+# by xrdp-sesexec gets EACCES on the render node and exits within ~1 s,
+# which surfaces in the xrdp log as "Xorg server closed connection" and
+# in the browser as a fast connect→disconnect cycle (no useful frame).
+# The standard fix on Ubuntu is to put every user that can RDP into
+# `video` and `render` (idempotent — already-in users are a no-op).
+getent group video  >/dev/null || groupadd -g 44 video
+getent group render >/dev/null || groupadd -g 990 render
+# Minimum UID the dashboard allows to sign in (matches src/config.js).
+MIN_LOGIN_UID="${MIN_LOGIN_UID:-1000}"
+while IFS=: read -r uname _ uid _ _ _ _; do
+  if [ "$uid" -ge "$MIN_LOGIN_UID" ] && [ "$uid" -lt 65534 ]; then
+    usermod -aG video,render "$uname" 2>/dev/null || true
+  fi
+done < /etc/passwd
+
+# Wipe stale per-user XFCE session configs that prevent xfwm4 from
+# starting. The container's startwm.sh doesn't hit this path, but the
+# host's xfce4-session can be pointed at a SessionName (e.g. "Default")
+# that has no matching <sessions> entry — in which case xfce4-session
+# silently skips the window manager and the user gets a frozen desktop.
+# Removing the corrupted channel file is safe: xfce4-session will
+# regenerate it on next start.
+echo "==> Clearing any stale XFCE session configs..."
+while IFS=: read -r uname _ uid _ _ _ _; do
+  if [ "$uid" -ge "$MIN_LOGIN_UID" ] && [ "$uid" -lt 65534 ]; then
+    USER_HOME="$(getent passwd "$uname" | cut -d: -f6)"
+    [ -d "$USER_HOME" ] || continue
+    for f in \
+      "$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml" \
+      "$USER_HOME/.cache/sessions/xfce4-session-$(hostname)" \
+      "$USER_HOME/.cache/sessions/xfce4-session-$(hostname)rc"; do
+      [ -f "$f" ] || continue
+      rm -f "$f" && echo "    removed: $f"
+    done
+  fi
+done < /etc/passwd
 
 # --- 4. guacd (via Docker; not packaged on current Ubuntu) ----------------
 GUACD_ENABLED=0
