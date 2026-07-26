@@ -136,8 +136,10 @@ into the box. Because everything runs on the host:
 - **Terminal** is a real shell on the server with every installed CLI tool.
 - **File Browser** shows your actual home directory.
 - **Web VS Code** edits the real filesystem.
-- **Remote Desktop** is a full session on the host's own desktop environment,
-  with **all installed applications**.
+- **Remote Desktop** is a full **XFCE** session on the host, with **all
+  installed applications** available. The installer installs XFCE if it isn't
+  already present (Ubuntu Desktop ships GNOME by default), so the desktop works
+  the same on 24.04 as on 26.04.
 
 Manage or remove it with:
 
@@ -152,14 +154,15 @@ sudo ./scripts/uninstall-host.sh          # remove the services
 - XRDP opens a **new login session** (with all your apps), not a mirror of the
   physical monitor. To share the exact screen on the monitor instead, use VNC
   to display `:0` or GNOME Remote Desktop — a different mechanism.
-- **GNOME allows only one session per user.** If the same account is already
-  logged in on the server's physical screen, log it out first, or connect with
-  a different account. Desktop environments like XFCE/MATE don't have this
-  limit and tend to be the smoothest over XRDP.
-- If a GNOME-over-XRDP session is black or drops immediately, installing a
-  lightweight DE for remote use is the usual fix:
-  `sudo apt install xfce4 xfce4-goodies` and set it as the session (e.g. put
-  `xfce4-session` in `~/.xsession`).
+- The remote session runs **XFCE** (installed by the installer), so the
+  one-session-per-user limit that affects GNOME doesn't apply, and XFCE tends to
+  be the smoothest desktop over XRDP.
+- **Connects then immediately disconnects?** This almost always means the XRDP
+  session process exited at startup — historically because `startxfce4` wasn't
+  installed on the host (common on stock Ubuntu 24.04, which ships GNOME only).
+  The installer now installs the XFCE packages for you; if you hit this on an
+  older install, run `sudo apt install xfce4 xfce4-goodies` (or just re-run
+  `sudo ./scripts/install-host.sh`) and confirm with `which startxfce4`.
 
 ---
 

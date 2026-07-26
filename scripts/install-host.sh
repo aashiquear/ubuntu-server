@@ -35,10 +35,20 @@ export DEBIAN_FRONTEND=noninteractive
 # --- 1. System packages ---------------------------------------------------
 echo "==> Installing base packages..."
 apt-get update
+# XRDP plus the XFCE desktop it launches. startwm.sh (installed below) always
+# exec's `startxfce4`, so the XFCE stack MUST be present or the session dies the
+# instant it starts — the browser shows "connected, then disconnected". On a
+# stock Ubuntu Desktop (GNOME) — e.g. 24.04 — XFCE is not installed by default,
+# so we install it here rather than assuming the host already has it. These are
+# the same desktop packages the Docker image installs (see Dockerfile), keeping
+# the host and container sessions identical. dbus-x11/xauth give the session a
+# message bus and X authority even when it isn't started under a full systemd
+# user session.
 apt-get install -y --no-install-recommends \
   ca-certificates curl gnupg openssl \
   build-essential python3 libpam0g-dev \
-  xrdp xorgxrdp
+  xrdp xorgxrdp dbus-x11 xauth \
+  xfce4 xfce4-terminal xfce4-goodies
 
 # Node.js >= 18
 if ! command -v node >/dev/null 2>&1 || [ "$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)" -lt 18 ]; then
@@ -195,7 +205,19 @@ export DESKTOP_SESSION=xfce
     sleep 1
   done
 ) &
-exec startxfce4
+# Launch XFCE. The installer guarantees the XFCE packages are present, but be
+# defensive: if startxfce4 somehow isn't on PATH, fall back to the host's
+# default X session (/etc/X11/Xsession honours ~/.xsession) rather than exiting
+# immediately — a silent exit here is what the browser reports as
+# "connected, then disconnected".
+if command -v startxfce4 >/dev/null 2>&1; then
+  exec startxfce4
+elif [ -x /etc/X11/Xsession ]; then
+  exec /etc/X11/Xsession
+else
+  echo "startwm.sh: no desktop session available (startxfce4 missing)" >&2
+  exit 1
+fi
 EOF
 chmod 0755 /etc/xrdp/startwm.sh
 
